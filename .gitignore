@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+*.pdf
+*.txt
+!requirements.txt
+!SYSTEM_PROMPT.md
+.DS_Store
+Thumbs.db
