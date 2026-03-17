@@ -300,28 +300,78 @@ function appendResult(module, chunk) {
   if (!block) return;
   
   const body = block.querySelector('.result-body');
-  const currentText = body.textContent + chunk;
+  
+  // 累积文本
+  if (!body.dataset.rawText) {
+    body.dataset.rawText = '';
+  }
+  body.dataset.rawText += chunk;
+  
+  const currentText = body.dataset.rawText;
   
   // 渲染 Markdown
-  body.innerHTML = marked.parse(currentText);
+  if (typeof marked !== 'undefined') {
+    body.innerHTML = marked.parse(currentText);
+  } else {
+    body.textContent = currentText;
+  }
   
-  // 渲染 Mermaid
-  setTimeout(() => renderMermaidInBlock(body), 100);
+  // 延迟渲染 Mermaid（等待 DOM 更新）
+  setTimeout(() => renderMermaidInBlock(body), 200);
 }
 
 function renderMermaidInBlock(container) {
-  const mermaidBlocks = container.querySelectorAll('code.language-mermaid');
+  // 查找所有 mermaid 代码块
+  const mermaidCodes = [];
   
-  mermaidBlocks.forEach((block, idx) => {
-    const code = block.textContent;
-    const id = `mermaid-${Date.now()}-${idx}`;
+  // 方式1: 查找 ```mermaid 代码块
+  const codeBlocks = container.querySelectorAll('pre code.language-mermaid');
+  codeBlocks.forEach((block, idx) => {
+    mermaidCodes.push({
+      element: block.parentElement,
+      code: block.textContent.trim()
+    });
+  });
+  
+  // 方式2: 查找包含 "```mermaid" 的 pre 标签
+  const preBlocks = container.querySelectorAll('pre');
+  preBlocks.forEach((pre) => {
+    const text = pre.textContent;
+    if (text.includes('```mermaid')) {
+      // 提取 mermaid 代码
+      const match = text.match(/```mermaid\s*([\s\S]*?)```/);
+      if (match) {
+        mermaidCodes.push({
+          element: pre,
+          code: match[1].trim()
+        });
+      }
+    }
+  });
+  
+  // 渲染每个 mermaid 代码块
+  mermaidCodes.forEach((item, idx) => {
+    const code = item.code;
+    const id = `mermaid-${module}-${Date.now()}-${idx}`;
     
-    mermaid.render(id, code).then((result) => {
-      const wrap = document.createElement('div');
-      wrap.className = 'mermaid-wrap';
-      wrap.innerHTML = result.svg;
-      block.parentNode.replaceWith(wrap);
-    }).catch(console.error);
+    if (typeof mermaid !== 'undefined') {
+      mermaid.render(id, code).then((result) => {
+        // 创建包装容器
+        const wrap = document.createElement('div');
+        wrap.className = 'mermaid-wrap';
+        wrap.innerHTML = result.svg;
+        
+        // 替换原始代码块
+        item.element.parentNode.replaceChild(wrap, item.element);
+      }).catch((error) => {
+        console.error('Mermaid 渲染错误:', error);
+        // 显示错误信息
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'mermaid-error';
+        errorDiv.innerHTML = `<p style="color:red;">图表渲染失败: ${error.message}</p><pre>${code}</pre>`;
+        item.element.parentNode.replaceChild(errorDiv, item.element);
+      });
+    }
   });
 }
 
