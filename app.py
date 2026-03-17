@@ -807,7 +807,7 @@ if st.session_state.pdf_text and selected_modules and api_key:
         st.divider()
     
     progress_bar.progress(1.0)
-    status_text.success("✅ 所有模块分析完成！")
+    status_text.success("✅ 所有模块分析完成！请按 R 键刷新页面以启用导出按钮。")
     st.balloons()
 
 elif st.session_state.pdf_text and not selected_modules:
