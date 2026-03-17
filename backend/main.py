@@ -86,8 +86,8 @@ class AnalyzeProgress(BaseModel):
 
 @app.get("/")
 async def root():
-    """返回前端页面"""
-    frontend_index = frontend_path / "index.html"
+    """返回前端页面（简化版）"""
+    frontend_index = frontend_path / "index-simple.html"
     if frontend_index.exists():
         return FileResponse(str(frontend_index))
     return {"status": "ok", "message": "Pro. Paper API v2.0.0"}
