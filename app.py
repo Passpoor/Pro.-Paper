@@ -309,6 +309,13 @@ def _generate_html_report() -> str:
         fontSize: '14px',
         background: '#ffffff',
         mainBkg: '#ffffff',
+        // 修复文字颜色问题
+        nodeTextColor: '#1e293b',
+        edgeLabelBackground: '#ffffff',
+        clusterBkg: '#f8fafc',
+        clusterBorder: '#e2e8f0',
+        titleColor: '#1e293b',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif'
       }}
     }});
     if (typeof marked !== 'undefined') {{
@@ -537,9 +544,18 @@ def render_mermaid(mermaid_code: str, height: int = 500):
     <script>
         mermaid.initialize({{
             startOnLoad: true,
-            theme: 'default',
+            theme: 'base',
             themeVariables: {{
-                fontSize: '14px'
+                primaryColor: '#3b82f6',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#2563eb',
+                lineColor: '#64748b',
+                fontSize: '14px',
+                background: '#ffffff',
+                mainBkg: '#ffffff',
+                nodeTextColor: '#1e293b',
+                edgeLabelBackground: '#ffffff',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif'
             }}
         }});
     </script>
@@ -759,85 +775,100 @@ if st.session_state.pdf_text and selected_modules and api_key:
         status_text = st.empty()
         
         for idx, module in enumerate(selected_modules):
-        status_text.info(f"🔄 正在分析：**{module}**...")
-        progress_bar.progress((idx) / len(selected_modules))
-        
-        # 获取模块对应的文本
-        module_text = get_analysis_text(
-            st.session_state.pdf_text,
-            st.session_state.sections,
-            module,
-        )
-        
-        # 构建用户提示
-        instruction = MODULE_INSTRUCTIONS[module]
-        if module == "构建课题":
-            direction = st.session_state.get("research_direction", "")
-            if direction:
-                user_content = f"{instruction}\n\n---\n\n## 我的论文\n\n{module_text[:30000]}\n\n---\n\n## 我的研究方向\n{direction}"
+            status_text.info(f"🔄 正在分析：**{module}**...")
+            progress_bar.progress((idx) / len(selected_modules))
+            
+            # 获取模块对应的文本
+            module_text = get_analysis_text(
+                st.session_state.pdf_text,
+                st.session_state.sections,
+                module,
+            )
+            
+            # 构建用户提示
+            instruction = MODULE_INSTRUCTIONS[module]
+            if module == "构建课题":
+                direction = st.session_state.get("research_direction", "")
+                if direction:
+                    user_content = f"{instruction}\n\n---\n\n## 我的论文\n\n{module_text[:30000]}\n\n---\n\n## 我的研究方向\n{direction}"
+                else:
+                    user_content = f"{instruction}\n\n---\n\n## 论文内容\n\n{module_text[:30000]}\n\n⚠️ 用户未提供研究方向，请基于论文内容给出通用迁移建议。"
+            elif module == "整篇拆解":
+                user_content = f"{instruction}\n\n---\n\n## 论文全文\n\n{module_text[:40000]}"
             else:
-                user_content = f"{instruction}\n\n---\n\n## 论文内容\n\n{module_text[:30000]}\n\n⚠️ 用户未提供研究方向，请基于论文内容给出通用迁移建议。"
-        elif module == "整篇拆解":
-            user_content = f"{instruction}\n\n---\n\n## 论文全文\n\n{module_text[:40000]}"
-        else:
-            user_content = f"{instruction}\n\n---\n\n## 论文内容\n\n{module_text[:35000]}"
+                user_content = f"{instruction}\n\n---\n\n## 论文内容\n\n{module_text[:35000]}"
+            
+            # 流式输出
+            st.subheader(f"{'━' * 3} {module} {'━' * 3}")
+            
+            result_container = st.empty()
+            full_result = ""
+            
+            try:
+                for chunk in stream_analysis(
+                    client, model, system_prompt, user_content,
+                    temperature=temperature, max_tokens=max_tokens,
+                ):
+                    full_result += chunk
+                    result_container.markdown(full_result)
+            except Exception as e:
+                st.error(f"分析失败: {e}")
+                full_result = f"[分析失败] {e}"
+            
+            # 保存结果
+            st.session_state.analyses[module] = {
+                "result": full_result,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "model": model,
+                "tokens_est": int(total_prompt_tokens + max_tokens),
+            }
+            
+            # 提取并渲染 Mermaid 图
+            mermaid_blocks = extract_mermaid_blocks(full_result)
+            if mermaid_blocks:
+                with st.expander("📊 因果路径图", expanded=True):
+                    for block in mermaid_blocks:
+                        render_mermaid(block, height=500)
+            
+            st.divider()
         
-        # 流式输出
-        st.subheader(f"{'━' * 3} {module} {'━' * 3}")
-        
-        result_container = st.empty()
-        full_result = ""
-        
-        try:
-            for chunk in stream_analysis(
-                client, model, system_prompt, user_content,
-                temperature=temperature, max_tokens=max_tokens,
-            ):
-                full_result += chunk
-                result_container.markdown(full_result)
-        except Exception as e:
-            st.error(f"分析失败: {e}")
-            full_result = f"[分析失败] {e}"
-        
-        # 保存结果
-        st.session_state.analyses[module] = {
-            "result": full_result,
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "model": model,
-            "tokens_est": int(total_prompt_tokens + max_tokens),
-        }
-        
-        # 提取并渲染 Mermaid 图
-        mermaid_blocks = extract_mermaid_blocks(full_result)
-        if mermaid_blocks:
-            with st.expander("📊 因果路径图", expanded=True):
-                for block in mermaid_blocks:
-                    render_mermaid(block, height=500)
-        
-        st.divider()
-    
-    progress_bar.progress(1.0)
-    status_text.success("✅ 所有模块分析完成！")
-    st.balloons()
+        progress_bar.progress(1.0)
+        status_text.success("✅ 所有模块分析完成！")
+        st.balloons()
 
 # 导出按钮（有分析结果时显示）
 if st.session_state.analyses:
     st.divider()
     st.subheader("📦 导出报告")
+    
+    # 使用缓存机制，只在分析结果改变时才重新生成报告
+    # 通过比较分析结果的 hash 来判断是否需要重新生成
+    current_hash = hash(tuple(
+        (m, info["result"][:100])  # 只取前100字符做hash，避免太慢
+        for m, info in sorted(st.session_state.analyses.items())
+    ))
+    
+    if "report_hash" not in st.session_state or st.session_state.report_hash != current_hash:
+        st.session_state.report_hash = current_hash
+        st.session_state.cached_html_report = _generate_html_report()
+        st.session_state.cached_md_report = _generate_report()
+    
     col_md, col_html = st.columns(2)
     with col_md:
         st.download_button(
             "📥 导出 Markdown",
-            data=_generate_report(),
+            data=st.session_state.cached_md_report,
             file_name="paper_analysis_report.md",
             mime="text/markdown",
+            key="download_md_btn",
         )
     with col_html:
         st.download_button(
             "📥 导出 HTML（含图表）",
-            data=_generate_html_report(),
+            data=st.session_state.cached_html_report,
             file_name="paper_analysis_report.html",
             mime="text/html",
+            key="download_html_btn",
         )
 
 elif st.session_state.pdf_text and not selected_modules:
