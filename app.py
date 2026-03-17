@@ -626,7 +626,6 @@ with st.sidebar:
             st.rerun()
     
     st.caption("💡 分析完成后，导出按钮将出现在页面底部")
-            st.button("📥 导出 HTML（含图表）", disabled=True)
 
 
 # ─── 主界面 ───────────────────────────────────────────────
