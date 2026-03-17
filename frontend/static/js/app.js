@@ -222,10 +222,24 @@ async function uploadPDF(file) {
     }
     
     // 显示预览和分析区域
+    console.log('显示预览和分析区域...');
     elements.previewSection.style.display = 'block';
     elements.analyzeSection.style.display = 'block';
     
-    showToast('✅ PDF 解析成功');
+    // 添加高亮动画
+    elements.analyzeSection.classList.add('highlight');
+    setTimeout(() => {
+      elements.analyzeSection.classList.remove('highlight');
+    }, 1000);
+    
+    // 滚动到分析区域
+    setTimeout(() => {
+      elements.analyzeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    
+    showToast('✅ PDF 解析成功！请配置 API 并开始分析');
+    
+    console.log('PDF 上传完成，状态:', state);
     
   } catch (error) {
     console.error('Upload error:', error);
