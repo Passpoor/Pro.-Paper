@@ -395,22 +395,22 @@ def _generate_html_report() -> str:
             var div = document.createElement('div');
             div.innerHTML = typeof marked !== 'undefined' ? marked.parse(b.content) : b.content;
             body.appendChild(div);
-          }}
-        }});
-        // 二次处理：找到 mermaid pre 块，替换为渲染的图表
-        var pres = body.querySelectorAll('pre code');
-        pres.forEach(function(preCode) {{
-          var text = preCode.textContent || preCode.innerText;
-          if (/^mermaid\\s/i.test(text.trim().split('\\n')[0])) {{
-            var code = text.trim().split('\\n').slice(1).join('\\n');
-            var parent = preCode.closest('pre');
-            if (parent) {{
-              var task = renderMm(code, mmIdx).then(function(res) {{
-                if (parent.parentNode) parent.parentNode.replaceChild(res.container, parent);
-                mmIdx++;
+          }} else if (b.type === 'mm') {{
+            // 直接渲染 mermaid 块
+            var placeholder = document.createElement('div');
+            placeholder.className = 'mermaid-loading';
+            placeholder.textContent = '加载图表...';
+            body.appendChild(placeholder);
+            (function(holder, code, idx) {{
+              var task = renderMm(code, idx).then(function(res) {{
+                holder.parentNode.replaceChild(res.container, holder);
+              }}).catch(function(e) {{
+                holder.className = 'mermaid-error';
+                holder.textContent = 'Mermaid 渲染失败: ' + e.message;
               }});
               tasks.push(task);
-            }}
+            }})(placeholder, b.content, mmIdx);
+            mmIdx++;
           }}
         }});
       }});
