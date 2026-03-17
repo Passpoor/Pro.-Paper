@@ -7,10 +7,6 @@
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-red?logo=streamlit&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ---
-**Developer:** [Yu Qiao (乔宇)](https://github.com/Passpoor) · PhD in Pharmacology · SJTU School of Pharmacy
-
-**Supervisors:** [Prof. Feng Qian](https://pharm.sjtu.edu.cn/szdy/2862.html), [Prof. Lei Sun](https://pharm.sjtu.edu.cn/szdy/2870.html)
-
 *Part of the **Yuanclaw** project at SJTU School of Pharmacy*
 
 </div
