@@ -108,22 +108,27 @@ def _generate_html_report() -> str:
     - 每个图表可独立导出为 PNG（参考 WeFlow 的 SVG→Canvas→PNG 方案）
     - Mermaid 渲染完成后可整体导出为 HTML 文件
     """
+    import base64
+    import json
+    
     meta = st.session_state.pdf_metadata
     
-    # 收集所有分析结果的 Markdown
-    sections_html = ""
+    # 收集所有分析结果，使用 JSON + base64 编码避免转义问题
+    sections_data = []
     for module, info in st.session_state.analyses.items():
-        # 转义 HTML 特殊字符用于嵌入到 JS 字符串
-        result_escaped = info["result"].replace("\\", "\\\\").replace("`", "\\`").replace("</script>", "<\\/script>")
-        sections_html += f"""
-      <div class="section-block">
-        <div class="section-header">
-          <h2>{module}</h2>
-          <span class="section-meta">模型: {info['model']} | 时间: {info['timestamp']}</span>
-        </div>
-        <div class="section-body" data-md="{result_escaped}"></div>
-      </div>
-"""
+        sections_data.append({
+            "module": module,
+            "model": info["model"],
+            "timestamp": info["timestamp"],
+            "result": info["result"]
+        })
+    
+    # JSON 编码后 base64，避免 HTML 属性转义问题
+    sections_json = json.dumps(sections_data, ensure_ascii=False)
+    sections_b64 = base64.b64encode(sections_json.encode('utf-8')).decode('ascii')
+    
+    # 生成 sections HTML（数据通过 JS 注入）
+    sections_html = '<div id="sections-container"></div>'
     
     title = meta.get("title", "未检测到标题") if meta else "论文分析报告"
     author = meta.get("author", "") if meta else ""
@@ -275,7 +280,23 @@ def _generate_html_report() -> str:
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>
   (function() {{
-    // 初始化
+    // 从 base64 解码数据
+    var sectionsB64 = "{sections_b64}";
+    var sectionsJson = atob(sectionsB64);
+    var sectionsData = JSON.parse(decodeURIComponent(escape(sectionsJson)));
+    
+    // 动态创建 sections
+    var container = document.getElementById('sections-container');
+    sectionsData.forEach(function(section) {{
+      var block = document.createElement('div');
+      block.className = 'section-block';
+      block.innerHTML = '<div class="section-header"><h2>' + section.module + '</h2><span class="section-meta">模型: ' + section.model + ' | 时间: ' + section.timestamp + '</span></div><div class="section-body"></div>';
+      var body = block.querySelector('.section-body');
+      body.setAttribute('data-md', section.result);
+      container.appendChild(block);
+    }});
+    
+    // 初始化 Mermaid
     mermaid.initialize({{
       startOnLoad: false,
       securityLevel: 'loose',
@@ -372,9 +393,9 @@ def _generate_html_report() -> str:
         var svg = pre.querySelector('svg');
         if (svg) btn.onclick = function() {{ svgToPng(svg, idx); }};
         return {{ container: wrap, svgEl: svg }};
-      }}).catch(function() {{
+      }}).catch(function(e) {{
         pre.className = 'mermaid-error';
-        pre.textContent = 'Mermaid 语法错误';
+        pre.textContent = 'Mermaid 语法错误: ' + (e.message || e);
         return {{ container: wrap, svgEl: null }};
       }});
     }}
@@ -396,7 +417,6 @@ def _generate_html_report() -> str:
             div.innerHTML = typeof marked !== 'undefined' ? marked.parse(b.content) : b.content;
             body.appendChild(div);
           }} else if (b.type === 'mm') {{
-            // 直接渲染 mermaid 块
             var placeholder = document.createElement('div');
             placeholder.className = 'mermaid-loading';
             placeholder.textContent = '加载图表...';
@@ -406,7 +426,7 @@ def _generate_html_report() -> str:
                 holder.parentNode.replaceChild(res.container, holder);
               }}).catch(function(e) {{
                 holder.className = 'mermaid-error';
-                holder.textContent = 'Mermaid 渲染失败: ' + e.message;
+                holder.textContent = 'Mermaid 渲染失败: ' + (e.message || e);
               }});
               tasks.push(task);
             }})(placeholder, b.content, mmIdx);
@@ -722,11 +742,23 @@ if st.session_state.pdf_text and selected_modules and api_key:
     
     st.info(f"📊 估算每次分析约消耗 ~{int(total_prompt_tokens + max_tokens):,} tokens（含输入+输出）× {len(selected_modules)} 个模块")
     
-    # 逐模块执行分析
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    # 开始分析按钮
+    col_btn, col_status = st.columns([1, 3])
+    with col_btn:
+        start_analysis = st.button("🚀 开始分析", type="primary")
+    with col_status:
+        # 显示已分析的模块
+        analyzed = [m for m in selected_modules if m in st.session_state.analyses]
+        if analyzed:
+            st.caption(f"✅ 已完成: {', '.join(analyzed)}")
     
-    for idx, module in enumerate(selected_modules):
+    # 只有点击按钮后才执行分析
+    if start_analysis:
+        # 逐模块执行分析
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, module in enumerate(selected_modules):
         status_text.info(f"🔄 正在分析：**{module}**...")
         progress_bar.progress((idx) / len(selected_modules))
         
@@ -787,8 +819,9 @@ if st.session_state.pdf_text and selected_modules and api_key:
     progress_bar.progress(1.0)
     status_text.success("✅ 所有模块分析完成！")
     st.balloons()
-    
-    # 在主界面底部显示导出按钮
+
+# 导出按钮（有分析结果时显示）
+if st.session_state.analyses:
     st.divider()
     st.subheader("📦 导出报告")
     col_md, col_html = st.columns(2)
