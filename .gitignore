@@ -9,3 +9,18 @@ venv/
 !SYSTEM_PROMPT.md
 .DS_Store
 Thumbs.db
+
+# 临时输出文件
+*.html
+!mermaid_template.html
+
+# 测试文件
+test_*.py
+temp_*.md
+
+# Streamlit 配置
+.streamlit/
+
+# 其他临时文件
+*.log
+*.tmp

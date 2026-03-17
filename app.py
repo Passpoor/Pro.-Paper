@@ -578,6 +578,8 @@ with st.sidebar:
                 file_name="paper_analysis_report.html",
                 mime="text/html",
             )
+    else:
+        st.info("💡 运行分析后，这里会出现导出按钮")
 
 
 # ─── 主界面 ───────────────────────────────────────────────
