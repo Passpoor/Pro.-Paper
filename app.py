@@ -807,8 +807,27 @@ if st.session_state.pdf_text and selected_modules and api_key:
         st.divider()
     
     progress_bar.progress(1.0)
-    status_text.success("✅ 所有模块分析完成！请按 R 键刷新页面以启用导出按钮。")
+    status_text.success("✅ 所有模块分析完成！")
     st.balloons()
+    
+    # 在主界面底部显示导出按钮
+    st.divider()
+    st.subheader("📦 导出报告")
+    col_md, col_html = st.columns(2)
+    with col_md:
+        st.download_button(
+            "📥 导出 Markdown",
+            data=_generate_report(),
+            file_name="paper_analysis_report.md",
+            mime="text/markdown",
+        )
+    with col_html:
+        st.download_button(
+            "📥 导出 HTML（含图表）",
+            data=_generate_html_report(),
+            file_name="paper_analysis_report.html",
+            mime="text/html",
+        )
 
 elif st.session_state.pdf_text and not selected_modules:
     st.header("🔬 第三步：运行分析")
