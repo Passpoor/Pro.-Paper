@@ -431,6 +431,48 @@ def _generate_html_report() -> str:
 
 # ─── Mermaid 渲染 ─────────────────────────────────────────
 
+def sanitize_mermaid_code(code: str) -> str:
+    """清理 Mermaid 代码，修复常见语法问题"""
+    # 用引号包裹包含特殊字符的节点标签
+    # 匹配 A[内容] 或 B(内容) 或 C((内容)) 等格式
+    def fix_label(match):
+        node_id = match.group(1)
+        shape = match.group(2)  # [, (, ((, 等
+        content = match.group(3)
+        close = match.group(4)  # ], ), )), 等
+        
+        # 如果内容包含特殊字符，用引号包裹
+        special_chars = ['(', ')', '"', "'", '<', '>', '&', '#']
+        if any(char in content for char in special_chars):
+            # 转义引号并用引号包裹
+            content = content.replace('"', '#quot;')
+            content = f'"{content}"'
+        
+        return f"{node_id}{shape}{content}{close}"
+    
+    # 处理各种节点形状: A[xxx], B(xxx), C((xxx)), D{{xxx}}, E>xxx]
+    patterns = [
+        (r'(\w+)\[([^\]]+)\]', '[', ']'),      # A[内容]
+        (r'(\w+)\(([^)]+)\)', '(', ')'),       # B(内容)
+        (r'(\w+)\(\(([^)]+)\)\)', '((', '))'), # C((内容))
+    ]
+    
+    for pattern, open_bracket, close_bracket in patterns:
+        def make_replacer(ob, cb):
+            def replacer(m):
+                node_id = m.group(1)
+                content = m.group(2)
+                special_chars = ['(', ')', '"', "'", '<', '>', '&', '#']
+                if any(char in content for char in special_chars):
+                    content = content.replace('"', '#quot;')
+                    content = f'"{content}"'
+                return f"{node_id}{ob}{content}{cb}"
+            return replacer
+        code = re.sub(pattern, make_replacer(open_bracket, close_bracket), code)
+    
+    return code
+
+
 def render_mermaid(mermaid_code: str, height: int = 500):
     """在 Streamlit 中渲染 Mermaid 图"""
     # 清理 markdown 代码块标记
@@ -438,32 +480,51 @@ def render_mermaid(mermaid_code: str, height: int = 500):
     code = re.sub(r"```\s*$", "", code)
     code = code.strip()
     
+    # 清理语法问题
+    code = sanitize_mermaid_code(code)
+    
     # 根据代码行数动态计算高度，确保显示完整
     line_count = len(code.split('\n'))
     dynamic_height = max(400, line_count * 28 + 100)
     
+    # 使用完整的 HTML 文档结构，确保 Mermaid 正确渲染
     html = f"""
-    <div class="mermaid-container">
-        <pre class="mermaid">
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {{
+            margin: 0;
+            padding: 10px;
+            background: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }}
+        .mermaid {{
+            display: flex;
+            justify-content: center;
+        }}
+        .mermaid svg {{
+            max-width: 100%;
+        }}
+    </style>
+</head>
+<body>
+    <div class="mermaid">
 {code}
-        </pre>
     </div>
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    <script>
         mermaid.initialize({{
             startOnLoad: true,
-            theme: 'base',
+            theme: 'default',
             themeVariables: {{
-                primaryColor: '#3b82f6',
-                primaryTextColor: '#fff',
-                primaryBorderColor: '#2563eb',
-                lineColor: '#64748b',
-                fontSize: '14px',
-                background: '#ffffff',
-                mainBkg: '#ffffff',
+                fontSize: '14px'
             }}
         }});
     </script>
+</body>
+</html>
     """
     components.html(html, height=dynamic_height)
 
@@ -557,7 +618,9 @@ with st.sidebar:
     
     st.divider()
     
-    # 操作按钮
+    # 操作按钮（始终显示）
+    st.subheader("📦 导出报告")
+    
     if st.session_state.analyses:
         if st.button("🗑️ 清除所有分析结果"):
             st.session_state.analyses = {}
@@ -579,7 +642,12 @@ with st.sidebar:
                 mime="text/html",
             )
     else:
-        st.info("💡 运行分析后，这里会出现导出按钮")
+        st.caption("⚠️ 尚未运行分析，导出按钮将在分析完成后可用")
+        col_md, col_html = st.columns(2)
+        with col_md:
+            st.button("📥 导出 Markdown", disabled=True)
+        with col_html:
+            st.button("📥 导出 HTML（含图表）", disabled=True)
 
 
 # ─── 主界面 ───────────────────────────────────────────────
