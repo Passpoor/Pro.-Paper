@@ -70,6 +70,32 @@ streamlit run app.py
 
 ---
 
+## 🔄 如何更新
+
+当项目有新版本时，在项目目录下执行：
+
+### Windows
+
+```powershell
+cd Pro.-Paper
+.\venv\Scripts\Activate
+git pull origin main
+pip install -r requirements.txt
+```
+
+### macOS / Linux
+
+```bash
+cd Pro.-Paper
+source venv/bin/activate
+git pull origin main
+pip install -r requirements.txt
+```
+
+> ✅ **更新会自动覆盖旧版本代码**，保留你的 `SYSTEM_PROMPT.md` 自定义修改（如果有冲突会提示）
+
+---
+
 ## 📖 使用指南
 
 ### Step 1：配置 API

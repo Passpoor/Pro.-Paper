@@ -618,35 +618,14 @@ with st.sidebar:
     
     st.divider()
     
-    # 操作按钮（始终显示）
-    st.subheader("📦 导出报告")
-    
+    # 清除按钮
     if st.session_state.analyses:
-        if st.button("🗑️ 清除所有分析结果"):
+        st.subheader("🗑️ 清除结果")
+        if st.button("清除所有分析结果"):
             st.session_state.analyses = {}
             st.rerun()
-        
-        col_md, col_html = st.columns(2)
-        with col_md:
-            st.download_button(
-                "📥 导出 Markdown",
-                data=_generate_report(),
-                file_name="paper_analysis_report.md",
-                mime="text/markdown",
-            )
-        with col_html:
-            st.download_button(
-                "📥 导出 HTML（含图表）",
-                data=_generate_html_report(),
-                file_name="paper_analysis_report.html",
-                mime="text/html",
-            )
-    else:
-        st.caption("⚠️ 尚未运行分析，导出按钮将在分析完成后可用")
-        col_md, col_html = st.columns(2)
-        with col_md:
-            st.button("📥 导出 Markdown", disabled=True)
-        with col_html:
+    
+    st.caption("💡 分析完成后，导出按钮将出现在页面底部")
             st.button("📥 导出 HTML（含图表）", disabled=True)
 
 
