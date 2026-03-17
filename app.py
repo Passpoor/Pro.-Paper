@@ -296,27 +296,11 @@ def _generate_html_report() -> str:
       container.appendChild(block);
     }});
     
-    // 初始化 Mermaid
+    // 初始化 Mermaid - 参考成熟方案
     mermaid.initialize({{
       startOnLoad: false,
-      securityLevel: 'loose',
-      theme: 'base',
-      themeVariables: {{
-        primaryColor: '#3b82f6',
-        primaryTextColor: '#fff',
-        primaryBorderColor: '#2563eb',
-        lineColor: '#64748b',
-        fontSize: '14px',
-        background: '#ffffff',
-        mainBkg: '#ffffff',
-        // 修复文字颜色问题
-        nodeTextColor: '#1e293b',
-        edgeLabelBackground: '#ffffff',
-        clusterBkg: '#f8fafc',
-        clusterBorder: '#e2e8f0',
-        titleColor: '#1e293b',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif'
-      }}
+      securityLevel: 'loose',  // 允许宽松语法
+      theme: 'neutral'
     }});
     if (typeof marked !== 'undefined') {{
       marked.setOptions({{ gfm: true, breaks: true }});
@@ -459,57 +443,14 @@ def _generate_html_report() -> str:
 # ─── Mermaid 渲染 ─────────────────────────────────────────
 
 def sanitize_mermaid_code(code: str) -> str:
-    """清理 Mermaid 代码，修复常见语法问题"""
-    # 处理各种节点形状，用引号包裹包含特殊字符的内容
-    # A[内容], B(内容), C((内容)), D{{内容}}, E>内容]
+    """清理 Mermaid 代码 - 参考成熟方案，只做基本清理，不做过度转义"""
+    # 只去除代码块标记和前后空白
+    code = re.sub(r"```mermaid\s*", "", code)
+    code = re.sub(r"```\s*$", "", code)
+    code = code.strip()
     
-    def escape_label_content(content: str) -> str:
-        """转义节点标签中的特殊字符"""
-        # Mermaid 要求用引号包裹包含特殊字符的标签
-        # 特殊字符：括号、引号、@、&、#等
-        special_chars = ['(', ')', '"', "'", '<', '>', '&', '#', '@', '%']
-        
-        if any(char in content for char in special_chars):
-            # 转义双引号
-            content = content.replace('"', '#quot;')
-            # 用双引号包裹整个内容
-            return f'"{content}"'
-        return content
-    
-    # 匹配各种节点形状：id[内容], id(内容), id((内容)), id{{内容}}, id>内容]
-    # 使用更精确的正则，避免贪婪匹配导致的问题
-    patterns = [
-        (r'(\w+)\[([^\]]*)\]', '[', ']'),           # A[内容]
-        (r'(\w+)\(([^)]*)\)', '(', ')'),            # B(内容) - 圆角矩形
-        (r'(\w+)\(\(([^)]*)\)\)', '((', '))'),      # C((内容)) - 圆形
-        (r'(\w+)\{\{([^}]*)\}\}', '{{', '}}'),      # D{{内容}} - 六边形
-        (r'(\w+)\[([^]]*)\]', '[', ']'),            # A[内容] - 再次处理确保覆盖
-    ]
-    
-    for pattern, open_bracket, close_bracket in patterns:
-        def make_replacer(ob, cb):
-            def replacer(m):
-                node_id = m.group(1)
-                content = m.group(2)
-                # 转义内容
-                escaped = escape_label_content(content)
-                return f"{node_id}{ob}{escaped}{cb}"
-            return replacer
-        code = re.sub(pattern, make_replacer(open_bracket, close_bracket), code)
-    
-    # 处理箭头和连线上的文字标签（可能也包含特殊字符）
-    # 例如：A -->|文字| B
-    def escape_edge_label(m):
-        arrow = m.group(1)
-        label = m.group(2)
-        if any(char in label for char in ['(', ')', '"', "'"]):
-            label = label.replace('"', '#quot;')
-            return f'{arrow}|"{label}"|'
-        return m.group(0)
-    
-    code = re.sub(r'(-->)\|([^|]+)\|', escape_edge_label, code)
-    code = re.sub(r'(---)\|([^|]+)\|', escape_edge_label, code)
-    
+    # 不做额外的转义，让 Mermaid.js 自己处理
+    # 参考微信编辑器成熟方案：securityLevel='loose'
     return code
 
 
@@ -557,19 +498,8 @@ def render_mermaid(mermaid_code: str, height: int = 500):
     <script>
         mermaid.initialize({{
             startOnLoad: true,
-            theme: 'base',
-            themeVariables: {{
-                primaryColor: '#3b82f6',
-                primaryTextColor: '#fff',
-                primaryBorderColor: '#2563eb',
-                lineColor: '#64748b',
-                fontSize: '14px',
-                background: '#ffffff',
-                mainBkg: '#ffffff',
-                nodeTextColor: '#1e293b',
-                edgeLabelBackground: '#ffffff',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif'
-            }}
+            securityLevel: 'loose',  // 允许宽松语法，参考成熟方案
+            theme: 'neutral'
         }});
     </script>
 </body>
