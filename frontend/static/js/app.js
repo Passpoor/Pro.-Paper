@@ -191,23 +191,31 @@ function handleFileSelect(e) {
 async function uploadPDF(file) {
   try {
     showToast('正在上传并解析 PDF...');
+    console.log('=== 开始上传 PDF ===');
     
     const formData = new FormData();
     formData.append('file', file);
     
+    console.log('发送请求到:', `${API_BASE}/api/upload`);
     const response = await fetch(`${API_BASE}/api/upload`, {
       method: 'POST',
       body: formData
     });
     
+    console.log('响应状态:', response.status);
+    
     if (!response.ok) {
-      throw new Error('上传失败');
+      const errorText = await response.text();
+      console.error('上传失败:', errorText);
+      throw new Error(`上传失败: ${response.status} ${errorText}`);
     }
     
     const data = await response.json();
+    console.log('服务器返回数据:', data);
     
     // 更新 UI
     state.pdfUploaded = true;
+    console.log('更新 state.pdfUploaded =', state.pdfUploaded);
     
     elements.paperTitle.textContent = data.metadata.title || '未检测到标题';
     elements.paperPages.textContent = data.metadata.pages || '?';
@@ -222,27 +230,47 @@ async function uploadPDF(file) {
     }
     
     // 显示预览和分析区域
-    console.log('显示预览和分析区域...');
-    elements.previewSection.style.display = 'block';
-    elements.analyzeSection.style.display = 'block';
+    console.log('=== 准备显示分析区域 ===');
+    console.log('previewSection 元素:', elements.previewSection);
+    console.log('analyzeSection 元素:', elements.analyzeSection);
     
-    // 添加高亮动画
-    elements.analyzeSection.classList.add('highlight');
-    setTimeout(() => {
-      elements.analyzeSection.classList.remove('highlight');
-    }, 1000);
+    if (elements.previewSection) {
+      elements.previewSection.style.display = 'block';
+      console.log('✅ previewSection 已显示');
+    } else {
+      console.error('❌ previewSection 未找到');
+    }
     
-    // 滚动到分析区域
-    setTimeout(() => {
-      elements.analyzeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    if (elements.analyzeSection) {
+      elements.analyzeSection.style.display = 'block';
+      elements.analyzeSection.style.border = '3px solid #3b82f6'; // 临时边框，确保可见
+      console.log('✅ analyzeSection 已显示，添加蓝色边框');
+      
+      // 添加高亮动画
+      elements.analyzeSection.classList.add('highlight');
+      setTimeout(() => {
+        elements.analyzeSection.classList.remove('highlight');
+      }, 1000);
+      
+      // 滚动到分析区域
+      setTimeout(() => {
+        elements.analyzeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        console.log('✅ 已滚动到分析区域');
+      }, 100);
+    } else {
+      console.error('❌ analyzeSection 未找到！检查元素 ID');
+    }
     
     showToast('✅ PDF 解析成功！请配置 API 并开始分析');
     
-    console.log('PDF 上传完成，状态:', state);
+    console.log('=== PDF 上传完成 ===');
+    console.log('当前 state:', state);
+    console.log('analyzeSection display:', elements.analyzeSection?.style.display);
     
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('=== 上传错误 ===');
+    console.error('错误信息:', error);
+    console.error('错误堆栈:', error.stack);
     showToast('❌ 上传失败: ' + error.message);
   }
 }
