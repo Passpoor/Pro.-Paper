@@ -460,28 +460,30 @@ def _generate_html_report() -> str:
 
 def sanitize_mermaid_code(code: str) -> str:
     """清理 Mermaid 代码，修复常见语法问题"""
-    # 用引号包裹包含特殊字符的节点标签
-    # 匹配 A[内容] 或 B(内容) 或 C((内容)) 等格式
-    def fix_label(match):
-        node_id = match.group(1)
-        shape = match.group(2)  # [, (, ((, 等
-        content = match.group(3)
-        close = match.group(4)  # ], ), )), 等
-        
-        # 如果内容包含特殊字符，用引号包裹
-        special_chars = ['(', ')', '"', "'", '<', '>', '&', '#']
-        if any(char in content for char in special_chars):
-            # 转义引号并用引号包裹
-            content = content.replace('"', '#quot;')
-            content = f'"{content}"'
-        
-        return f"{node_id}{shape}{content}{close}"
+    # 处理各种节点形状，用引号包裹包含特殊字符的内容
+    # A[内容], B(内容), C((内容)), D{{内容}}, E>内容]
     
-    # 处理各种节点形状: A[xxx], B(xxx), C((xxx)), D{{xxx}}, E>xxx]
+    def escape_label_content(content: str) -> str:
+        """转义节点标签中的特殊字符"""
+        # Mermaid 要求用引号包裹包含特殊字符的标签
+        # 特殊字符：括号、引号、@、&、#等
+        special_chars = ['(', ')', '"', "'", '<', '>', '&', '#', '@', '%']
+        
+        if any(char in content for char in special_chars):
+            # 转义双引号
+            content = content.replace('"', '#quot;')
+            # 用双引号包裹整个内容
+            return f'"{content}"'
+        return content
+    
+    # 匹配各种节点形状：id[内容], id(内容), id((内容)), id{{内容}}, id>内容]
+    # 使用更精确的正则，避免贪婪匹配导致的问题
     patterns = [
-        (r'(\w+)\[([^\]]+)\]', '[', ']'),      # A[内容]
-        (r'(\w+)\(([^)]+)\)', '(', ')'),       # B(内容)
-        (r'(\w+)\(\(([^)]+)\)\)', '((', '))'), # C((内容))
+        (r'(\w+)\[([^\]]*)\]', '[', ']'),           # A[内容]
+        (r'(\w+)\(([^)]*)\)', '(', ')'),            # B(内容) - 圆角矩形
+        (r'(\w+)\(\(([^)]*)\)\)', '((', '))'),      # C((内容)) - 圆形
+        (r'(\w+)\{\{([^}]*)\}\}', '{{', '}}'),      # D{{内容}} - 六边形
+        (r'(\w+)\[([^]]*)\]', '[', ']'),            # A[内容] - 再次处理确保覆盖
     ]
     
     for pattern, open_bracket, close_bracket in patterns:
@@ -489,13 +491,24 @@ def sanitize_mermaid_code(code: str) -> str:
             def replacer(m):
                 node_id = m.group(1)
                 content = m.group(2)
-                special_chars = ['(', ')', '"', "'", '<', '>', '&', '#']
-                if any(char in content for char in special_chars):
-                    content = content.replace('"', '#quot;')
-                    content = f'"{content}"'
-                return f"{node_id}{ob}{content}{cb}"
+                # 转义内容
+                escaped = escape_label_content(content)
+                return f"{node_id}{ob}{escaped}{cb}"
             return replacer
         code = re.sub(pattern, make_replacer(open_bracket, close_bracket), code)
+    
+    # 处理箭头和连线上的文字标签（可能也包含特殊字符）
+    # 例如：A -->|文字| B
+    def escape_edge_label(m):
+        arrow = m.group(1)
+        label = m.group(2)
+        if any(char in label for char in ['(', ')', '"', "'"]):
+            label = label.replace('"', '#quot;')
+            return f'{arrow}|"{label}"|'
+        return m.group(0)
+    
+    code = re.sub(r'(-->)\|([^|]+)\|', escape_edge_label, code)
+    code = re.sub(r'(---)\|([^|]+)\|', escape_edge_label, code)
     
     return code
 
@@ -761,7 +774,7 @@ if st.session_state.pdf_text and selected_modules and api_key:
     # 开始分析按钮
     col_btn, col_status = st.columns([1, 3])
     with col_btn:
-        start_analysis = st.button("🚀 开始分析", type="primary")
+        start_analysis = st.button("🚀 开始分析", type="primary", key="start_analysis_btn")
     with col_status:
         # 显示已分析的模块
         analyzed = [m for m in selected_modules if m in st.session_state.analyses]
@@ -769,7 +782,14 @@ if st.session_state.pdf_text and selected_modules and api_key:
             st.caption(f"✅ 已完成: {', '.join(analyzed)}")
     
     # 只有点击按钮后才执行分析
+    # 使用严格的条件判断，防止意外触发
+    if start_analysis and "analyses" not in st.session_state:
+        st.session_state.analyses = {}
+    
     if start_analysis:
+        # 清空旧的分析结果，开始新分析
+        st.session_state.analyses = {}
+        
         # 逐模块执行分析
         progress_bar = st.progress(0)
         status_text = st.empty()
