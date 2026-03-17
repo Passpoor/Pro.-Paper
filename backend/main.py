@@ -60,6 +60,19 @@ class AnalyzeRequest(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 4000
     research_direction: Optional[str] = ""
+    text: Optional[str] = ""  # 新增：直接文本输入
+
+
+class AnalyzeSimpleRequest(BaseModel):
+    """简化版分析请求 - 支持直接文本输入"""
+    text: str
+    modules: List[str]
+    api_key: str
+    base_url: str
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 4000
+    research_direction: Optional[str] = ""
 
 
 class AnalyzeProgress(BaseModel):
@@ -111,10 +124,81 @@ async def upload_pdf(file: UploadFile = File(...)):
             "metadata": metadata,
             "sections": list(sections.keys()) if sections else [],
             "char_count": len(pdf_text),
-            "token_estimate": int(len(pdf_text) * 0.25)
+            "token_estimate": int(len(pdf_text) * 0.25),
+            "text": pdf_text  # 添加文本内容
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF 解析失败: {str(e)}")
+
+
+@app.post("/api/analyze-simple")
+async def analyze_simple(request: AnalyzeSimpleRequest):
+    """简化版分析 - 支持直接文本输入，流式返回"""
+    if not request.text:
+        raise HTTPException(status_code=400, detail="文本内容不能为空")
+    
+    async def event_stream():
+        """SSE 事件流"""
+        try:
+            # 创建 LLM 客户端
+            client = create_client(request.api_key, request.base_url)
+            system_prompt = load_system_prompt()
+            
+            # 检测章节
+            sections = detect_sections(request.text)
+            
+            for idx, module in enumerate(request.modules):
+                # 发送进度
+                progress = idx / len(request.modules)
+                yield f"data: {json.dumps({'type': 'progress', 'module': module, 'progress': progress, 'status': 'analyzing'})}\n\n"
+                
+                try:
+                    # 获取模块对应的文本
+                    module_text = get_analysis_text(request.text, sections, module)
+                    
+                    # 构建用户提示
+                    instruction = MODULE_INSTRUCTIONS[module]
+                    if module == "构建课题":
+                        if request.research_direction:
+                            user_content = f"{instruction}\n\n---\n\n## 我的论文\n\n{module_text[:30000]}\n\n---\n\n## 我的研究方向\n{request.research_direction}"
+                        else:
+                            user_content = f"{instruction}\n\n---\n\n## 论文内容\n\n{module_text[:30000]}\n\n⚠️ 用户未提供研究方向，请基于论文内容给出通用迁移建议。"
+                    elif module == "整篇拆解":
+                        user_content = f"{instruction}\n\n---\n\n## 论文全文\n\n{module_text[:40000]}"
+                    else:
+                        user_content = f"{instruction}\n\n---\n\n## 论文内容\n\n{module_text[:35000]}"
+                    
+                    # 流式分析
+                    full_result = ""
+                    for chunk in stream_analysis(
+                        client, request.model, system_prompt, user_content,
+                        temperature=request.temperature, max_tokens=request.max_tokens
+                    ):
+                        full_result += chunk
+                        # 发送分析结果片段
+                        yield f"data: {json.dumps({'type': 'chunk', 'module': module, 'chunk': chunk})}\n\n"
+                    
+                    # 发送完成信号
+                    yield f"data: {json.dumps({'type': 'completed', 'module': module, 'status': 'success'})}\n\n"
+                    
+                except Exception as e:
+                    error_msg = f"分析失败: {str(e)}"
+                    yield f"data: {json.dumps({'type': 'error', 'module': module, 'error': error_msg})}\n\n"
+            
+            # 全部完成
+            yield f"data: {json.dumps({'type': 'done', 'progress': 1.0})}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @app.get("/api/metadata")
